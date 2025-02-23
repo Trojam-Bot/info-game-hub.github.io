@@ -1,3 +1,4 @@
+
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
 @tailwind base;
@@ -25,11 +26,11 @@
   }
 
   * {
-    @apply border-border font-inter;
+    @apply border-border font-sans;
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-inter;
   }
 
   ::-webkit-scrollbar {
