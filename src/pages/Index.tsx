@@ -1,162 +1,156 @@
 
-import { useState } from "react";
-import { FeaturedGame } from "@/components/FeaturedGame";
-import { GameCard } from "@/components/GameCard";
-import { Search } from "lucide-react";
+import { useState, useEffect } from 'react';
+import { toast } from "sonner";
+import { motion, AnimatePresence } from "framer-motion";
 
-const FEATURED_GAME = {
-  id: "1",
-  title: "Cyberpunk 2077",
-  description: "Experience the dark future in this open-world action-adventure RPG set in Night City, a megalopolis obsessed with power, glamour and body modification.",
-  image: "https://images.unsplash.com/photo-1498050108023-c5249f4df085"
-};
+interface Upgrade {
+  id: string;
+  name: string;
+  cost: number;
+  multiplier: number;
+  count: number;
+  perSecond: number;
+}
 
-const GAMES = [
-  {
-    id: "2",
-    title: "The Last Guardian",
-    category: "Adventure",
-    image: "https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d",
-    tags: ["Adventure", "Puzzle", "Story-Rich"]
-  },
-  {
-    id: "3",
-    title: "Death Stranding",
-    category: "Action",
-    image: "https://images.unsplash.com/photo-1487058792275-0ad4aaf24ca7",
-    tags: ["Action", "Open World", "Story-Rich"]
-  },
-  {
-    id: "4",
-    title: "Horizon Zero Dawn",
-    category: "RPG",
-    image: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158",
-    tags: ["RPG", "Action", "Open World"]
-  },
-  {
-    id: "5",
-    title: "Red Dead Redemption 2",
-    category: "Action",
-    image: "https://images.unsplash.com/photo-1531297484001-80022131f5a1",
-    tags: ["Action", "Adventure", "Open World"]
-  },
-  {
-    id: "6",
-    title: "Elden Ring",
-    category: "RPG",
-    image: "https://images.unsplash.com/photo-1542751371-adc38448a05e",
-    tags: ["RPG", "Action", "Souls-like"]
-  },
-  {
-    id: "7",
-    title: "God of War",
-    category: "Action",
-    image: "https://images.unsplash.com/photo-1552820728-8b83bb6b773f",
-    tags: ["Action", "Adventure", "Story-Rich"]
-  },
-  {
-    id: "8",
-    title: "The Witcher 3",
-    category: "RPG",
-    image: "https://images.unsplash.com/photo-1550745165-9bc0b252726f",
-    tags: ["RPG", "Open World", "Story-Rich"]
-  },
-  {
-    id: "9",
-    title: "Portal 2",
-    category: "Puzzle",
-    image: "https://images.unsplash.com/photo-1550745165-9bc0b252726f",
-    tags: ["Puzzle", "Co-op", "Sci-fi"]
-  }
+const INITIAL_UPGRADES: Upgrade[] = [
+  { id: 'click', name: 'Better Click', cost: 10, multiplier: 1, count: 0, perSecond: 0 },
+  { id: 'auto', name: 'Auto Clicker', cost: 50, multiplier: 0, count: 0, perSecond: 1 },
+  { id: 'boost', name: 'Point Boost', cost: 100, multiplier: 2, count: 0, perSecond: 0 },
 ];
 
-const ALL_TAGS = Array.from(
-  new Set(GAMES.flatMap(game => game.tags))
-).sort();
-
 const Index = () => {
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-
-  const filteredGames = GAMES.filter(game => {
-    const matchesSearch = game.title.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesTags = selectedTags.length === 0 || 
-      selectedTags.some(tag => game.tags.includes(tag));
-    return matchesSearch && matchesTags;
+  const [score, setScore] = useState(() => {
+    const saved = localStorage.getItem('clickerScore');
+    return saved ? parseInt(saved) : 0;
   });
+  const [upgrades, setUpgrades] = useState<Upgrade[]>(() => {
+    const saved = localStorage.getItem('clickerUpgrades');
+    return saved ? JSON.parse(saved) : INITIAL_UPGRADES;
+  });
+  const [particles, setParticles] = useState<{ id: number; x: number; y: number }[]>([]);
 
-  const toggleTag = (tag: string) => {
-    setSelectedTags(prev =>
-      prev.includes(tag)
-        ? prev.filter(t => t !== tag)
-        : [...prev, tag]
-    );
+  // Calculate total multiplier and points per second
+  const totalMultiplier = upgrades.reduce((acc, upgrade) => 
+    acc + (upgrade.multiplier * upgrade.count), 1);
+  const pointsPerSecond = upgrades.reduce((acc, upgrade) => 
+    acc + (upgrade.perSecond * upgrade.count), 0);
+
+  // Auto-clicker effect
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (pointsPerSecond > 0) {
+        setScore(prev => prev + pointsPerSecond);
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [pointsPerSecond]);
+
+  // Save game state
+  useEffect(() => {
+    localStorage.setItem('clickerScore', score.toString());
+    localStorage.setItem('clickerUpgrades', JSON.stringify(upgrades));
+  }, [score, upgrades]);
+
+  // Handle main click
+  const handleClick = (event: React.MouseEvent) => {
+    const rect = (event.target as HTMLElement).getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+
+    setScore(prev => prev + totalMultiplier);
+    setParticles(prev => [
+      ...prev,
+      { id: Date.now(), x, y }
+    ]);
+
+    // Clean up particles after animation
+    setTimeout(() => {
+      setParticles(prev => prev.filter(p => p.id !== Date.now()));
+    }, 1000);
+  };
+
+  // Handle upgrade purchase
+  const buyUpgrade = (upgradeId: string) => {
+    const upgrade = upgrades.find(u => u.id === upgradeId);
+    if (!upgrade) return;
+
+    if (score >= upgrade.cost) {
+      setScore(prev => prev - upgrade.cost);
+      setUpgrades(prev => prev.map(u => 
+        u.id === upgradeId 
+          ? { 
+              ...u, 
+              count: u.count + 1,
+              cost: Math.floor(u.cost * 1.5) // Increase cost for next purchase
+            }
+          : u
+      ));
+      toast.success(`Purchased ${upgrade.name}!`);
+    } else {
+      toast.error("Not enough points!");
+    }
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <FeaturedGame {...FEATURED_GAME} />
-      
-      <div className="flex gap-6 mt-12">
-        {/* Sidebar */}
-        <aside className={`w-64 flex-shrink-0 transition-all duration-300 ${
-          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        }`}>
-          <div className="glass-panel rounded-xl p-6 sticky top-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold">Filters</h3>
-              <button
-                onClick={() => setIsSidebarOpen(false)}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                ×
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {ALL_TAGS.map(tag => (
-                <button
-                  key={tag}
-                  className="sidebar-tag"
-                  data-selected={selectedTags.includes(tag)}
-                  onClick={() => toggleTag(tag)}
-                >
-                  {tag}
-                </button>
-              ))}
-            </div>
-          </div>
-        </aside>
+    <div className="min-h-screen bg-background p-8">
+      <div className="max-w-4xl mx-auto space-y-8">
+        {/* Score Display */}
+        <div className="glass-panel rounded-2xl p-6 text-center space-y-2">
+          <h1 className="text-4xl font-bold">{score.toLocaleString()} Points</h1>
+          <p className="text-muted-foreground">
+            {pointsPerSecond > 0 && `${pointsPerSecond} points per second`}
+          </p>
+        </div>
 
-        <div className="flex-1 space-y-6">
-          {/* Search and Controls */}
-          <div className="flex items-center gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="search"
-                placeholder="Search games..."
-                className="search-bar pl-12"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-            {!isSidebarOpen && (
-              <button
-                onClick={() => setIsSidebarOpen(true)}
-                className="glass-panel p-2 rounded-lg hover:bg-accent/50 transition-colors"
+        {/* Main Clicker Button */}
+        <div className="relative flex justify-center">
+          <AnimatePresence>
+            {particles.map(particle => (
+              <motion.div
+                key={particle.id}
+                initial={{ opacity: 1, scale: 1, x: particle.x, y: particle.y }}
+                animate={{ opacity: 0, scale: 2, y: particle.y - 100 }}
+                exit={{ opacity: 0 }}
+                className="absolute text-primary font-bold"
+                transition={{ duration: 1 }}
               >
-                Filters
-              </button>
-            )}
-          </div>
-
-          {/* Games Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {filteredGames.map((game) => (
-              <GameCard key={game.id} {...game} />
+                +{totalMultiplier}
+              </motion.div>
             ))}
-          </div>
+          </AnimatePresence>
+          <button
+            onClick={handleClick}
+            className="w-48 h-48 rounded-full glass-panel hover:bg-accent/20 
+              active:scale-95 transition-all duration-200 shadow-lg hover:shadow-primary/20
+              flex items-center justify-center text-2xl font-bold"
+          >
+            CLICK!
+          </button>
+        </div>
+
+        {/* Upgrades */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {upgrades.map(upgrade => (
+            <button
+              key={upgrade.id}
+              onClick={() => buyUpgrade(upgrade.id)}
+              className="glass-panel p-4 rounded-xl text-left space-y-2 hover:bg-accent/20 
+                transition-colors disabled:opacity-50 disabled:hover:bg-transparent"
+              disabled={score < upgrade.cost}
+            >
+              <div className="flex justify-between items-center">
+                <h3 className="font-semibold">{upgrade.name}</h3>
+                <span className="text-sm text-muted-foreground">
+                  Cost: {upgrade.cost}
+                </span>
+              </div>
+              <div className="text-sm text-muted-foreground">
+                Owned: {upgrade.count}
+                {upgrade.multiplier > 0 && ` (${upgrade.multiplier}x per click)`}
+                {upgrade.perSecond > 0 && ` (+${upgrade.perSecond}/s)`}
+              </div>
+            </button>
+          ))}
         </div>
       </div>
     </div>
